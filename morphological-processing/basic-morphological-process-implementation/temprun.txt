@@ -1,0 +1,1 @@
+g++ -std=c++17 ./basic-morphological-process-implementation.cpp -o ./basic-morphological-process-implementation
