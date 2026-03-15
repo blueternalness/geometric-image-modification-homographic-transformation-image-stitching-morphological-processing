@@ -7,11 +7,10 @@
 
 using namespace std;
 
-// --- Helper Functions ---
 vector<unsigned char> readRaw(const string& filename, int w, int h) {
     vector<unsigned char> img(w * h, 0);
     ifstream file(filename, ios::binary);
-    if (file) file.read(reinterpret_cast<char*>(img.data()), w * h);
+    file.read(reinterpret_cast<char*>(img.data()), w * h);
     return img;
 }
 
@@ -21,7 +20,6 @@ void binarize(vector<unsigned char>& img) {
     }
 }
 
-// --- Shape Detection Algorithms ---
 void floodFillEdges(vector<unsigned char>& img, int w, int h) {
     queue<pair<int, int>> q;
     for (int x = 0; x < w; x++) {
@@ -37,7 +35,6 @@ void floodFillEdges(vector<unsigned char>& img, int w, int h) {
         auto [x, y] = q.front();
         q.pop();
         img[y * w + x] = 2; 
-        
         int dx[] = {-1, 1, 0, 0};
         int dy[] = {0, 0, -1, 1};
         for (int i = 0; i < 4; i++) {
@@ -48,7 +45,9 @@ void floodFillEdges(vector<unsigned char>& img, int w, int h) {
             }
         }
     }
-    for(int i = 0; i < w * h; i++) img[i] = (img[i] == 2) ? 1 : 0;
+    for(int i = 0; i < w * h; i++){
+        img[i] = (img[i] == 2) ? 1 : 0;
+    }
 }
 
 void countConnectedComponents(const vector<unsigned char>& img, int w, int h, vector<vector<pair<int,int>>>& blobs) {
@@ -84,55 +83,47 @@ void countConnectedComponents(const vector<unsigned char>& img, int w, int h, ve
 void processBoard(const string& filename) {
     int w = 445, h = 445;
     vector<unsigned char> img = readRaw(filename, w, h);
-    if (img.empty()) {
-        cerr << "Failed to load image." << endl;
-        return;
-    }
     binarize(img);
-    
-    // 1. Find Holes
     vector<unsigned char> invImg(w * h);
-    for (int i = 0; i < w * h; i++) invImg[i] = 1 - img[i];
+    for (int i = 0; i < w * h; i++) {
+        invImg[i] = 1 - img[i];
+    }
+    
     
     vector<unsigned char> background = invImg;
     floodFillEdges(background, w, h); 
     
     vector<unsigned char> holes(w * h);
-    for (int i = 0; i < w * h; i++) holes[i] = invImg[i] - background[i];
+    for (int i = 0; i < w * h; i++) {
+        holes[i] = invImg[i] - background[i];
+    }
     
     vector<vector<pair<int,int>>> holeBlobs;
     countConnectedComponents(holes, w, h, holeBlobs);
     int totalHoles = holeBlobs.size();
     
-    // 2. Find Objects 
     vector<unsigned char> solidImg(w * h);
-    for (int i = 0; i < w * h; i++) solidImg[i] = img[i] | holes[i];
+    for (int i = 0; i < w * h; i++) {
+        solidImg[i] = img[i] | holes[i];
+    }
     
     vector<vector<pair<int,int>>> objects;
     countConnectedComponents(solidImg, w, h, objects);
     int totalObjects = objects.size();
     
-    // 3 & 4. Classify Rectangles and Circles using Extent
     int totalRectangles = 0;
     int totalCircles = 0;
-    
     for (const auto& blob : objects) {
-        // Find bounding box limits
         int minX = w, maxX = 0, minY = h, maxY = 0;
         for (auto p : blob) {
             minX = min(minX, p.first); maxX = max(maxX, p.first);
             minY = min(minY, p.second); maxY = max(maxY, p.second);
         }
         
-        // Calculate areas
         double boundingBoxArea = (maxX - minX + 1) * (maxY - minY + 1);
         double objectArea = blob.size();
-        
-        // Calculate Extent metric
         double extent = objectArea / boundingBoxArea;
         
-        // Axis-aligned rectangles fill ~100% of their bounding box (>0.90)
-        // Circles fill roughly pi/4 (~78.5%) of their bounding box (<0.90)
         if (extent > 0.90) {
             totalRectangles++;
         } else {
@@ -140,11 +131,10 @@ void processBoard(const string& filename) {
         }
     }
     
-    cout << "\n--- Board Analysis Results ---" << endl;
-    cout << "(1) Total Number of Holes: " << totalHoles << endl;
-    cout << "(2) Total Number of White Objects: " << totalObjects << endl;
-    cout << "(3) Total Number of White Rectangles: " << totalRectangles << endl;
-    cout << "(4) Total Number of White Circles: " << totalCircles << endl;
+    cout << "Total Number of Holes: " << totalHoles << endl;
+    cout << "Total Number of White Objects: " << totalObjects << endl;
+    cout << "Total Number of White Rectangles: " << totalRectangles << endl;
+    cout << "Total Number of White Circles: " << totalCircles << endl;
 }
 
 int main() {
