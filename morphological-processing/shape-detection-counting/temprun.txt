@@ -1,0 +1,1 @@
+g++ -std=c++17 ./shape-detection-counting.cpp -o ./shape-detection-counting
