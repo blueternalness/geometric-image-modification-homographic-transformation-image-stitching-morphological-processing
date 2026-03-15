@@ -1,0 +1,1 @@
+g++ -std=c++17 homographic-transformation-image-stitching.cpp -o homographic-transformation-image-stitching `pkg-config --cflags --libs opencv4`
