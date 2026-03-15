@@ -1,0 +1,1 @@
+g++ -std=c++17 ./geometric-image-modification.cpp -o ./geometric-image-modification
