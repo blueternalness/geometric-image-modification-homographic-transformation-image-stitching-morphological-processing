@@ -8,29 +8,22 @@
 using namespace std;
 
 // --- Helper Functions ---
-
 vector<unsigned char> readRaw(const string& filename, int w, int h) {
     vector<unsigned char> img(w * h, 0);
     ifstream file(filename, ios::binary);
-    if (file) {
-        file.read(reinterpret_cast<char*>(img.data()), w * h);
-    } else {
-        cerr << "Error: Could not open " << filename << endl;
-    }
+    if (file) file.read(reinterpret_cast<char*>(img.data()), w * h);
     return img;
 }
 
 void binarize(vector<unsigned char>& img) {
     for (size_t i = 0; i < img.size(); i++) {
-        img[i] = (img[i] > 127) ? 1 : 0; // 0.5 * 255
+        img[i] = (img[i] > 127) ? 1 : 0;
     }
 }
 
 // --- Shape Detection Algorithms ---
-
 void floodFillEdges(vector<unsigned char>& img, int w, int h) {
     queue<pair<int, int>> q;
-    // Push boundaries
     for (int x = 0; x < w; x++) {
         if (img[0 * w + x] == 1) q.push({x, 0});
         if (img[(h - 1) * w + x] == 1) q.push({x, h - 1});
@@ -43,8 +36,7 @@ void floodFillEdges(vector<unsigned char>& img, int w, int h) {
     while (!q.empty()) {
         auto [x, y] = q.front();
         q.pop();
-        
-        img[y * w + x] = 2; // Temporary background label
+        img[y * w + x] = 2; 
         
         int dx[] = {-1, 1, 0, 0};
         int dy[] = {0, 0, -1, 1};
@@ -56,21 +48,16 @@ void floodFillEdges(vector<unsigned char>& img, int w, int h) {
             }
         }
     }
-    // Revert 2s to 1s, and other 1s to 0s
-    for(int i = 0; i < w * h; i++) {
-        img[i] = (img[i] == 2) ? 1 : 0;
-    }
+    for(int i = 0; i < w * h; i++) img[i] = (img[i] == 2) ? 1 : 0;
 }
 
 void countConnectedComponents(const vector<unsigned char>& img, int w, int h, vector<vector<pair<int,int>>>& blobs) {
     vector<bool> visited(w * h, false);
-    
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
             if (img[y * w + x] == 1 && !visited[y * w + x]) {
                 queue<pair<int, int>> q;
                 vector<pair<int,int>> currentBlob;
-                
                 q.push({x, y});
                 visited[y * w + x] = true;
                 
@@ -78,7 +65,6 @@ void countConnectedComponents(const vector<unsigned char>& img, int w, int h, ve
                     auto [cx, cy] = q.front();
                     q.pop();
                     currentBlob.push_back({cx, cy});
-                    
                     for (int dy = -1; dy <= 1; dy++) {
                         for (int dx = -1; dx <= 1; dx++) {
                             int nx = cx + dx, ny = cy + dy;
@@ -98,7 +84,10 @@ void countConnectedComponents(const vector<unsigned char>& img, int w, int h, ve
 void processBoard(const string& filename) {
     int w = 445, h = 445;
     vector<unsigned char> img = readRaw(filename, w, h);
-    if (img.empty()) return;
+    if (img.empty()) {
+        cerr << "Failed to load image." << endl;
+        return;
+    }
     binarize(img);
     
     // 1. Find Holes
@@ -123,50 +112,31 @@ void processBoard(const string& filename) {
     countConnectedComponents(solidImg, w, h, objects);
     int totalObjects = objects.size();
     
-    // 3 & 4. Classify Rectangles and Circles
+    // 3 & 4. Classify Rectangles and Circles using Extent
     int totalRectangles = 0;
     int totalCircles = 0;
     
     for (const auto& blob : objects) {
+        // Find bounding box limits
         int minX = w, maxX = 0, minY = h, maxY = 0;
         for (auto p : blob) {
             minX = min(minX, p.first); maxX = max(maxX, p.first);
             minY = min(minY, p.second); maxY = max(maxY, p.second);
         }
         
-        int bw = maxX - minX + 3, bh = maxY - minY + 3;
-        vector<unsigned char> localObj(bw * bh, 0);
-        for (auto p : blob) localObj[(p.second - minY + 1) * bw + (p.first - minX + 1)] = 1;
+        // Calculate areas
+        double boundingBoxArea = (maxX - minX + 1) * (maxY - minY + 1);
+        double objectArea = blob.size();
         
-        // Morphological Erosion 
-        vector<unsigned char> localEroded = localObj;
-        for (int y = 1; y < bh - 1; y++) {
-            for (int x = 1; x < bw - 1; x++) {
-                if (localObj[y * bw + x] == 1) {
-                    bool keep = true;
-                    for (int dy = -1; dy <= 1; dy++) {
-                        for (int dx = -1; dx <= 1; dx++) {
-                            if (localObj[(y + dy) * bw + (x + dx)] == 0) keep = false;
-                        }
-                    }
-                    localEroded[y * bw + x] = keep ? 1 : 0;
-                }
-            }
-        }
+        // Calculate Extent metric
+        double extent = objectArea / boundingBoxArea;
         
-        // Compactness Calculation
-        int area = 0, perimeter = 0;
-        for (int i = 0; i < bw * bh; i++) {
-            if (localObj[i] == 1) area++;
-            if (localObj[i] - localEroded[i] == 1) perimeter++;
-        }
-        
-        double compactness = (double)(perimeter * perimeter) / area;
-        
-        if (compactness < 14.5) {
-            totalCircles++;
-        } else {
+        // Axis-aligned rectangles fill ~100% of their bounding box (>0.90)
+        // Circles fill roughly pi/4 (~78.5%) of their bounding box (<0.90)
+        if (extent > 0.90) {
             totalRectangles++;
+        } else {
+            totalCircles++;
         }
     }
     
